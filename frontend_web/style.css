@@ -72,30 +72,30 @@ body {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   box-shadow: var(--shadow-sm);
-  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .frosted-card:hover {
   background: var(--bg-card-hover);
   border-color: rgba(250, 36, 60, 0.35);
-  box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.16);
+  transform: translateY(-4px);
 }
 
 /* Currently Playing Active Card Highlight */
 .card-now-playing {
   border-color: var(--apple-red) !important;
-  box-shadow: 0 0 0 2px var(--apple-red), 0 8px 24px rgba(250, 36, 60, 0.25) !important;
+  box-shadow: 0 0 0 2px var(--apple-red), 0 12px 30px rgba(250, 36, 60, 0.28) !important;
 }
 
-/* Album Art Containers & Vinyl Sleeve */
+/* Album Art Containers & Modern Apple Rounded Covers */
 .album-art-wrap {
   position: relative;
   width: 100%;
   aspect-ratio: 1 / 1;
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
   background-color: #1a1a1e;
 }
 
@@ -103,52 +103,53 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.frosted-card:hover .album-img,
 .album-art-wrap:hover .album-img {
-  transform: scale(1.05);
+  transform: scale(1.06);
 }
 
 .play-hover-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.38);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   cursor: pointer;
 }
 
-.album-art-wrap:hover .play-hover-overlay,
+.frosted-card:hover .play-hover-overlay,
 .album-art-wrap.is-playing .play-hover-overlay {
   opacity: 1;
 }
 
 .play-circle-btn {
-  width: 48px;
-  height: 48px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
   background: var(--apple-red);
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 18px rgba(250, 36, 60, 0.5);
+  box-shadow: 0 6px 22px rgba(250, 36, 60, 0.5);
   transform: scale(0.85);
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.15s ease;
 }
 
-.album-art-wrap:hover .play-circle-btn {
+.frosted-card:hover .play-circle-btn {
   transform: scale(1);
 }
 
 .play-circle-btn:hover {
   background: var(--apple-red-hover);
-  transform: scale(1.08) !important;
+  transform: scale(1.1) !important;
 }
 
 /* Reason Pill Badges */

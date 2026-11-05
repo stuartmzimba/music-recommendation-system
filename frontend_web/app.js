@@ -383,8 +383,12 @@ function setTheme(theme) {
   const icon = document.getElementById('theme-icon');
   if (icon) {
     icon.setAttribute('data-lucide', theme === 'dark' ? 'sun' : 'moon');
-    if (window.lucide) lucide.createIcons();
   }
+  const headerIcon = document.getElementById('theme-icon-header');
+  if (headerIcon) {
+    headerIcon.setAttribute('data-lucide', theme === 'dark' ? 'sun' : 'moon');
+  }
+  if (window.lucide) lucide.createIcons();
   if (state.radarChart) updateRadarTheme();
 }
 
@@ -449,16 +453,18 @@ function renderHeroBasketChips() {
   const container = document.getElementById('hero-basket-chips');
   const badge = document.getElementById('sidebar-basket-badge');
   if (badge) badge.textContent = state.basket.size;
+  const headerBadge = document.getElementById('header-basket-badge');
+  if (headerBadge) headerBadge.textContent = state.basket.size;
 
   if (state.basket.size === 0) {
-    container.innerHTML = `<span class="text-xs text-neutral-400 italic">No seeds yet. Pick a preset or add below!</span>`;
+    container.innerHTML = `<span class="text-xs text-neutral-400 italic">No seeds yet. Pick a preset above or add an artist!</span>`;
     return;
   }
 
   container.innerHTML = Array.from(state.basket).map(item => `
-    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 hover:bg-white/20 text-white border border-white/10 backdrop-blur-md shadow-sm transition-colors">
+    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-neutral-200/70 dark:bg-neutral-800/80 hover:bg-neutral-300/70 dark:hover:bg-neutral-700/80 text-neutral-800 dark:text-neutral-100 border border-neutral-300/60 dark:border-neutral-700/60 shadow-sm transition-colors">
       <span class="max-w-[130px] truncate">${escapeHtml(item)}</span>
-      <button onclick="removeFromBasket('${escapeHtml(item).replace(/'/g, "\\'")}')" class="text-neutral-400 hover:text-white transition-colors" title="Remove seed">
+      <button onclick="removeFromBasket('${escapeHtml(item).replace(/'/g, "\\'")}')" class="text-neutral-400 hover:text-[#FA243C] transition-colors" title="Remove seed">
         <i data-lucide="x" class="w-3 h-3"></i>
       </button>
     </span>
@@ -677,6 +683,7 @@ function renderRecommendations() {
     const imgId = `rec-art-${i}`;
     const cardId = `rec-card-${i}`;
     const pillClass = track.reason === 'apriori' ? 'reason-apriori' : (track.reason === 'content_based' ? 'reason-content' : 'reason-popular');
+    const reasonIcon = track.reason === 'apriori' ? '🤝' : (track.reason === 'content_based' ? '🎯' : '🔥');
     const reasonText = track.reason === 'apriori' ? 'Co-Listen' : (track.reason === 'content_based' ? 'Acoustic' : 'Trending');
     const safeTrack = JSON.stringify(track).replace(/"/g, '&quot;');
 
@@ -686,52 +693,57 @@ function renderRecommendations() {
     setTimeout(() => resolveArtwork(track.spotify_id, track.track_name, track.artist, imgId), 15 * i);
 
     return `
-      <div id="${cardId}" class="frosted-card rounded-2xl p-3 border border-neutral-200/80 dark:border-neutral-800 flex flex-col justify-between group ${isNowPlaying ? 'card-now-playing' : ''}">
+      <div id="${cardId}" class="frosted-card rounded-2xl sm:rounded-3xl p-3.5 border border-neutral-200/80 dark:border-neutral-800 flex flex-col justify-between group transition-all duration-300 hover:shadow-xl ${isNowPlaying ? 'card-now-playing' : ''}">
         <div>
           <!-- Album Art Cover -->
-          <div class="album-art-wrap mb-2.5 ${isNowPlaying ? 'is-playing' : ''}" style="background: ${gradient};">
+          <div class="album-art-wrap mb-3 ${isNowPlaying ? 'is-playing' : ''}" style="background: ${gradient};">
             <img id="${imgId}" src="" alt="${escapeHtml(track.track_name)}" class="album-img hidden">
             
-            <!-- Hover Play Button -->
+            <!-- Hover Play Button Overlay -->
             <div class="play-hover-overlay" onclick="handleCardPlayClick(${safeTrack}, ${i})">
               <div class="play-circle-btn">
-                <i data-lucide="${isNowPlaying ? 'pause' : 'play'}" class="w-4 h-4 fill-current ml-0.5"></i>
+                <i data-lucide="${isNowPlaying ? 'pause' : 'play'}" class="w-5 h-5 fill-current ${isNowPlaying ? '' : 'ml-0.5'}"></i>
               </div>
             </div>
 
             <!-- Reason Pill Floating on Art -->
-            <span class="absolute top-2 left-2 ${pillClass} shadow-md backdrop-blur-md">
-              ${reasonText}
+            <span class="absolute top-2.5 left-2.5 ${pillClass} shadow-md backdrop-blur-md text-[10px] px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1">
+              <span>${reasonIcon}</span>
+              <span>${reasonText}</span>
             </span>
 
             <!-- Now Playing Animated Wave on Artwork -->
             ${isNowPlaying ? `
-              <div class="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-md">
-                <div class="eq-container"><span class="eq-bar"></span><span class="eq-bar"></span><span class="eq-bar"></span></div>
+              <div class="absolute bottom-2.5 right-2.5 px-2 py-1 rounded-lg bg-black/70 backdrop-blur-md flex items-center gap-1 shadow-lg">
+                <div class="eq-container"><span class="eq-bar"></span><span class="eq-bar"></span><span class="eq-bar"></span><span class="eq-bar"></span></div>
               </div>
             ` : ''}
           </div>
 
           <!-- Title & Artist -->
-          <div class="space-y-0.5">
-            <div class="flex items-center justify-between gap-1">
-              <h4 class="text-xs font-bold text-neutral-900 dark:text-white truncate" title="${escapeHtml(track.track_name)}">
+          <div class="space-y-1">
+            <div class="flex items-start justify-between gap-1.5">
+              <h4 onclick="handleCardPlayClick(${safeTrack}, ${i})" class="text-sm font-bold text-neutral-900 dark:text-white truncate cursor-pointer hover:text-[#FA243C] transition-colors flex-1" title="${escapeHtml(track.track_name)}">
                 ${escapeHtml(track.track_name)}
               </h4>
-              <button onclick="addToBasket('${escapeHtml(track.artist).replace(/'/g, "\\'")}')" class="text-neutral-400 hover:text-[#FA243C] p-0.5" title="Add artist to taste basket">
+              <button onclick="addToBasket('${escapeHtml(track.artist).replace(/'/g, "\\'")}')" class="text-neutral-400 hover:text-[#FA243C] p-1 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors flex-shrink-0" title="Add artist to taste basket">
                 <i data-lucide="plus" class="w-3.5 h-3.5"></i>
               </button>
             </div>
-            <p class="text-[11px] text-neutral-500 dark:text-neutral-400 truncate font-medium">
+            <p class="text-xs text-neutral-500 dark:text-neutral-400 truncate font-medium">
               ${escapeHtml(track.artist)}
             </p>
           </div>
         </div>
 
-        <!-- Footer Match Meter -->
-        <div class="mt-2.5 pt-2 border-t border-neutral-100 dark:border-neutral-800/80 flex items-center justify-between text-[10px]">
-          <span class="text-neutral-400 capitalize truncate max-w-[70px]">${escapeHtml(track.genre || 'South Africa')}</span>
-          <span class="font-bold text-neutral-700 dark:text-neutral-300">${Math.round(track.score * 100)}% match</span>
+        <!-- Footer Match Meter & Genre -->
+        <div class="mt-3 pt-2.5 border-t border-neutral-100 dark:border-neutral-800/80 flex items-center justify-between text-[11px]">
+          <span class="px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 capitalize truncate max-w-[85px] font-semibold text-[10px]">
+            ${escapeHtml(track.genre || 'South Africa')}
+          </span>
+          <span class="font-extrabold text-[#FA243C] dark:text-[#FB5B76] text-xs">
+            ${Math.round(track.score * 100)}% match
+          </span>
         </div>
       </div>
     `;
@@ -845,33 +857,33 @@ async function loadTopCharts(genre = 'All') {
       const rankBadgeColor = i === 0 ? 'bg-amber-400 text-black' : (i === 1 ? 'bg-slate-300 text-black' : (i === 2 ? 'bg-amber-700 text-white' : 'bg-black/50 text-white'));
 
       return `
-        <div class="frosted-card rounded-2xl p-3 border border-neutral-200/80 dark:border-neutral-800 flex flex-col justify-between">
+        <div class="frosted-card rounded-2xl sm:rounded-3xl p-3.5 border border-neutral-200/80 dark:border-neutral-800 flex flex-col justify-between group transition-all duration-300 hover:shadow-xl">
           <div>
-            <div class="album-art-wrap mb-2.5" style="background: ${gradient};">
+            <div class="album-art-wrap mb-3" style="background: ${gradient};">
               <img id="${imgId}" src="" alt="${escapeHtml(song.track_name)}" class="album-img hidden">
               
-              <span class="absolute top-2 left-2 px-2 py-0.5 rounded-md text-[10px] font-black uppercase shadow-md ${rankBadgeColor}">
+              <span class="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase shadow-md ${rankBadgeColor}">
                 #${i + 1}
               </span>
 
               <div class="play-hover-overlay" onclick="playTrack(${safeSong}, ${i})">
                 <div class="play-circle-btn">
-                  <i data-lucide="play" class="w-4 h-4 fill-current ml-0.5"></i>
+                  <i data-lucide="play" class="w-5 h-5 fill-current ml-0.5"></i>
                 </div>
               </div>
             </div>
 
-            <h4 class="text-xs font-bold text-neutral-900 dark:text-white truncate" title="${escapeHtml(song.track_name)}">
+            <h4 onclick="playTrack(${safeSong}, ${i})" class="text-sm font-bold text-neutral-900 dark:text-white truncate cursor-pointer hover:text-[#FA243C] transition-colors" title="${escapeHtml(song.track_name)}">
               ${escapeHtml(song.track_name)}
             </h4>
-            <p class="text-[11px] text-neutral-500 truncate mt-0.5">
+            <p class="text-xs text-neutral-500 dark:text-neutral-400 truncate mt-0.5 font-medium">
               ${escapeHtml(song.artist)}
             </p>
           </div>
 
-          <div class="mt-2.5 pt-2 border-t border-neutral-100 dark:border-neutral-800/80 flex items-center justify-between text-[10px] text-neutral-400">
-            <span class="capitalize truncate">${escapeHtml(song.genre || 'South Africa')}</span>
-            <span class="font-bold text-neutral-700 dark:text-neutral-300">★ ${Math.round((song.popularity_score || 0.8) * 100)}</span>
+          <div class="mt-3 pt-2.5 border-t border-neutral-100 dark:border-neutral-800/80 flex items-center justify-between text-[11px] text-neutral-400">
+            <span class="px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 capitalize truncate max-w-[85px] font-semibold text-[10px]">${escapeHtml(song.genre || 'South Africa')}</span>
+            <span class="font-extrabold text-neutral-700 dark:text-neutral-300">★ ${Math.round((song.popularity_score || 0.8) * 100)}</span>
           </div>
         </div>
       `;
