@@ -251,13 +251,18 @@ class DataLoader:
         
         results = {}
         
-        # Load songs
-        songs_file = os.path.join(sample_data_dir, "south_african_songs.csv")
-        if os.path.exists(songs_file):
-            results['songs'] = self.load_songs_from_csv(songs_file)
-        else:
-            logger.warning(f"Songs file not found: {songs_file}")
-            results['songs'] = 0
+        # Load songs: prefer full catalog spotify_massive_songs.csv (includes Kendrick Lamar, Drake, Hip-Hop, Pop, etc.)
+        # combined with south_african_songs.csv
+        total_songs = 0
+        massive_file = os.path.join(sample_data_dir, "spotify_massive_songs.csv")
+        if os.path.exists(massive_file):
+            total_songs += self.load_songs_from_csv(massive_file)
+
+        sa_file = os.path.join(sample_data_dir, "south_african_songs.csv")
+        if os.path.exists(sa_file):
+            total_songs += self.load_songs_from_csv(sa_file)
+
+        results['songs'] = total_songs
         
         # Load listening history
         history_file = os.path.join(sample_data_dir, "user_listening_history.csv")

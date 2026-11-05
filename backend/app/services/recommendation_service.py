@@ -87,7 +87,7 @@ class RecommendationService:
         inferred_genres = set()
         if clean_basket:
             for item in clean_basket:
-                # Find matches by artist or track title
+                # Find matches by artist or track title in catalog
                 matched_songs = (
                     self.db.query(Song)
                     .filter(or_(Song.artist.ilike(f"%{item}%"), Song.track_name.ilike(f"%{item}%")))
@@ -95,6 +95,10 @@ class RecommendationService:
                     .limit(4)
                     .all()
                 )
+                # Universal Artist Ingestion: If artist/song is not in catalog yet, fetch globally on the fly!
+                if not matched_songs:
+                    matched_songs = self._fetch_external_tracks(item, limit=6)
+
                 for s in matched_songs:
                     if s.genre:
                         inferred_genres.add(s.genre.strip())
@@ -113,6 +117,12 @@ class RecommendationService:
             # If user didn't specify genres, augment with inferred genres so fallbacks stay contextually accurate
             if not clean_genres and inferred_genres:
                 clean_genres = list(inferred_genres)
+
+            # Ensure inferred genre has sufficient tracks in DB for rich fallback recommendations
+            for g in clean_genres:
+                genre_count = self.db.query(Song).filter(Song.genre.ilike(f"%{g}%")).count()
+                if genre_count < 6:
+                    self._fetch_external_tracks(f"{g} hits", limit=10)
 
         # 1. Apriori-based recommendations
         if clean_basket:
@@ -433,8 +443,75 @@ class RecommendationService:
             logger.error(f"Error retrieving popular artists: {e}")
             raise
 
+    def _fetch_external_tracks(self, query: str, limit: int = 10) -> List[Song]:
+        """Fetch tracks dynamically from Apple Music/iTunes API and persist to database for universal availability."""
+        try:
+            import urllib.request
+            import urllib.parse
+            import json
+
+            url = f"https://itunes.apple.com/search?term={urllib.parse.quote(query.strip())}&entity=song&limit={limit}"
+            req = urllib.request.Request(url, headers={'User-Agent': 'MusicRecommender/2.0'})
+            with urllib.request.urlopen(req, timeout=4) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+
+            results = data.get("results", [])
+            persisted_songs = []
+
+            for item in results:
+                track_name = (item.get("trackName") or "").strip()
+                artist = (item.get("artistName") or "").strip()
+                if not track_name or not artist:
+                    continue
+
+                track_id = str(item.get("trackId") or "")
+                spotify_id = f"itunes_{track_id}" if track_id else None
+                genre_raw = (item.get("primaryGenreName") or "Pop").strip()
+                genre = "Hip-Hop" if any(w in genre_raw.lower() for w in ["hip-hop", "rap"]) else genre_raw
+
+                # Check if song already exists in database
+                existing = self.db.query(Song).filter(
+                    or_(
+                        Song.spotify_id == spotify_id if spotify_id else False,
+                        func.lower(Song.track_name) == track_name.lower()
+                    ),
+                    func.lower(Song.artist) == artist.lower()
+                ).first()
+
+                if not existing:
+                    existing = Song(
+                        track_name=track_name,
+                        artist=artist,
+                        genre=genre,
+                        spotify_id=spotify_id,
+                        popularity_score=85.0,
+                        danceability=0.72,
+                        energy=0.70,
+                        valence=0.68,
+                        tempo=120.0,
+                        acousticness=0.20,
+                        instrumentalness=0.01,
+                        liveness=0.15,
+                        speechiness=0.10
+                    )
+                    self.db.add(existing)
+
+                persisted_songs.append(existing)
+
+            if persisted_songs:
+                try:
+                    self.db.commit()
+                except Exception as commit_err:
+                    logger.warning(f"Database commit error during external ingestion: {commit_err}")
+                    self.db.rollback()
+
+            return persisted_songs
+        except Exception as e:
+            logger.warning(f"Error fetching external tracks for '{query}': {e}")
+            return []
+
     async def search_songs(self, query: str, limit: int = 20) -> List[SongSearchResult]:
-        """Search songs with broad multi-token matching across title, artist, and genre."""
+        """Search songs with broad multi-token matching across title, artist, and genre + universal global ingestion."""
         try:
             tokens = [t.strip() for t in query.strip().split() if t.strip()]
             if not tokens:
@@ -481,6 +558,16 @@ class RecommendationService:
                     .all()
                 )
                 songs.extend(secondary_songs)
+                for s in secondary_songs:
+                    matched_ids.add(s.id)
+
+            # 3. Universal Global Availability: If results are few (< 4), fetch globally from Apple Music on the fly
+            if len(songs) < 4:
+                ext_songs = self._fetch_external_tracks(query, limit=12)
+                for s in ext_songs:
+                    if s.id not in matched_ids and len(songs) < limit:
+                        songs.append(s)
+                        matched_ids.add(s.id)
 
             return [
                 SongSearchResult(
