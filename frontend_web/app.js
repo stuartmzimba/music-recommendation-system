@@ -543,6 +543,10 @@ function applyPreset(vibe) {
       basket: ['Kabza De Small', 'DJ Maphorisa', 'Young Stunna', 'Jerusalema'],
       genres: ['amapiano']
     },
+    hiphop: {
+      basket: ['Kendrick Lamar', 'Drake', 'Eminem', 'Tyler, The Creator'],
+      genres: ['Hip-Hop']
+    },
     afrobeats: {
       basket: ['Burna Boy', 'Wizkid', 'Tems', 'Rema'],
       genres: ['afrobeats']
@@ -1089,8 +1093,21 @@ function renderAlgorithmChart(counts) {
 }
 
 // ============================================================================
-// LIVE CATALOG SEARCH
+// LIVE CATALOG & GLOBAL SEARCH
 // ============================================================================
+function handleGlobalSearchSubmit(query) {
+  if (!query || !query.trim()) return;
+  const q = query.trim();
+  addToBasket(q);
+  const dropdown = document.getElementById('search-dropdown');
+  if (dropdown) dropdown.classList.add('hidden');
+  const searchInput = document.getElementById('global-search');
+  if (searchInput) searchInput.value = '';
+  showToast(`Generating mix for "${q}"...`, 'sparkles');
+  switchTab('listen-now');
+  fetchRecommendations();
+}
+
 function handleLiveSearch(query) {
   clearTimeout(state.searchTimeout);
   const dropdown = document.getElementById('search-dropdown');
@@ -1100,22 +1117,35 @@ function handleLiveSearch(query) {
     return;
   }
 
+  const cleanQuery = query.trim();
+
   state.searchTimeout = setTimeout(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/search?query=${encodeURIComponent(query)}&limit=6`);
-      if (!res.ok) return;
-      const results = await res.json();
+      const res = await fetch(`${API_BASE}/api/v1/search?query=${encodeURIComponent(cleanQuery)}&limit=6`);
+      let results = [];
+      if (res.ok) {
+        results = await res.json();
+      }
 
-      if (results.length === 0) {
-        dropdown.innerHTML = `<div class="p-3 text-xs text-neutral-400 text-center">No songs found in catalog</div>`;
-      } else {
-        dropdown.innerHTML = results.map(s => {
+      let html = `
+        <div onclick="handleGlobalSearchSubmit('${escapeHtml(cleanQuery).replace(/'/g, "\\'")}')" class="p-2.5 mb-2 rounded-xl bg-gradient-to-r from-[#FA243C]/20 to-[#FA243C]/10 border border-[#FA243C]/30 hover:border-[#FA243C] cursor-pointer flex items-center justify-between transition-all group">
+          <div class="flex items-center gap-2">
+            <i data-lucide="sparkles" class="w-4 h-4 text-[#FA243C]"></i>
+            <span class="text-xs font-bold text-neutral-900 dark:text-white">Discover Mix for "${escapeHtml(cleanQuery)}"</span>
+          </div>
+          <span class="text-[10px] font-mono uppercase bg-neutral-200 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300 px-2 py-0.5 rounded">Enter ↵</span>
+        </div>
+      `;
+
+      if (results.length > 0) {
+        html += `<div class="px-2 pb-1 text-[10px] font-bold tracking-wider text-neutral-400 uppercase">Local Catalog</div>`;
+        html += results.map(s => {
           const safeTrack = JSON.stringify(s).replace(/"/g, '&quot;');
           return `
             <div class="p-2 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer flex items-center justify-between transition-colors">
               <div class="truncate pr-2" onclick="playTrack(${safeTrack})">
                 <div class="text-xs font-bold text-neutral-900 dark:text-white truncate">${escapeHtml(s.track_name)}</div>
-                <div class="text-[10px] text-neutral-500 dark:text-neutral-400 truncate">${escapeHtml(s.artist)}</div>
+                <div class="text-[10px] text-neutral-500 dark:text-neutral-400 truncate">${escapeHtml(s.artist)} ${s.genre ? '• ' + escapeHtml(s.genre) : ''}</div>
               </div>
               <div class="flex items-center gap-1.5 flex-shrink-0">
                 <button onclick="playTrack(${safeTrack})" class="p-1 rounded-full text-neutral-400 hover:text-white hover:bg-[#FA243C]" title="Play Preview">
@@ -1129,6 +1159,52 @@ function handleLiveSearch(query) {
           `;
         }).join('');
       }
+
+      // If local matches are few or query is very specific, offer Apple Music Global Catalog discovery
+      if (results.length < 3) {
+        try {
+          const itunesRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanQuery)}&entity=song&limit=4`);
+          if (itunesRes.ok) {
+            const itunesData = await itunesRes.json();
+            if (itunesData.results && itunesData.results.length > 0) {
+              html += `<div class="mt-2 px-2 pt-1 border-t border-neutral-200 dark:border-neutral-700/60 pb-1 text-[10px] font-bold tracking-wider text-[#FA243C] uppercase flex items-center gap-1">
+                <i data-lucide="globe" class="w-3 h-3"></i> Global Discovery (Apple Music)
+              </div>`;
+              html += itunesData.results.map(item => {
+                const trackObj = {
+                  track_name: item.trackName,
+                  artist: item.artistName,
+                  genre: item.primaryGenreName,
+                  popularity_score: 85,
+                  spotify_id: null,
+                  preview_url: item.previewUrl
+                };
+                const safeTrack = JSON.stringify(trackObj).replace(/"/g, '&quot;');
+                return `
+                  <div class="p-2 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer flex items-center justify-between transition-colors">
+                    <div class="truncate pr-2" onclick="playTrack(${safeTrack})">
+                      <div class="text-xs font-bold text-neutral-900 dark:text-white truncate">${escapeHtml(item.trackName)}</div>
+                      <div class="text-[10px] text-neutral-500 dark:text-neutral-400 truncate">${escapeHtml(item.artistName)} • ${escapeHtml(item.primaryGenreName || 'Global')}</div>
+                    </div>
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                      <button onclick="playTrack(${safeTrack})" class="p-1 rounded-full text-neutral-400 hover:text-white hover:bg-[#FA243C]" title="Play Preview">
+                        <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
+                      </button>
+                      <button onclick="addTrackFromSearch('${escapeHtml(item.trackName).replace(/'/g, "\\'")}', '${escapeHtml(item.artistName).replace(/'/g, "\\'")}')" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FA243C]/10 text-[#FA243C] flex items-center gap-0.5 hover:bg-[#FA243C] hover:text-white transition-all">
+                        <i data-lucide="plus" class="w-3 h-3"></i> Add
+                      </button>
+                    </div>
+                  </div>
+                `;
+              }).join('');
+            }
+          }
+        } catch (itunesErr) {
+          console.warn('Global search fallback unavailable:', itunesErr);
+        }
+      }
+
+      dropdown.innerHTML = html;
       dropdown.classList.remove('hidden');
       if (window.lucide) lucide.createIcons();
     } catch (e) {
@@ -1139,8 +1215,12 @@ function handleLiveSearch(query) {
 
 function addTrackFromSearch(trackName, artist) {
   addToBasket(artist);
-  document.getElementById('search-dropdown').classList.add('hidden');
-  document.getElementById('global-search').value = '';
+  const dropdown = document.getElementById('search-dropdown');
+  if (dropdown) dropdown.classList.add('hidden');
+  const searchInput = document.getElementById('global-search');
+  if (searchInput) searchInput.value = '';
+  showToast(`Added ${artist} to taste seeds`, 'sparkles');
+  fetchRecommendations();
 }
 
 // ============================================================================

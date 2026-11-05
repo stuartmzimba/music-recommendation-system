@@ -83,6 +83,37 @@ class RecommendationService:
         clean_basket = [b.strip() for b in basket if b and b.strip()] if basket else []
         clean_genres = [g.strip() for g in genres if g and g.strip()] if genres else []
 
+        # 0. Intelligent artist/song seed expansion & genre inference
+        inferred_genres = set()
+        if clean_basket:
+            for item in clean_basket:
+                # Find matches by artist or track title
+                matched_songs = (
+                    self.db.query(Song)
+                    .filter(or_(Song.artist.ilike(f"%{item}%"), Song.track_name.ilike(f"%{item}%")))
+                    .order_by(desc(Song.popularity_score))
+                    .limit(4)
+                    .all()
+                )
+                for s in matched_songs:
+                    if s.genre:
+                        inferred_genres.add(s.genre.strip())
+                    # Include top popular tracks of seed artist/song for direct relevance
+                    if s.spotify_id and s.spotify_id not in seen_spotify_ids and len(recommendations) < 3:
+                        seen_spotify_ids.add(s.spotify_id)
+                        recommendations.append(RecommendationResponse(
+                            track_name=s.track_name,
+                            artist=s.artist,
+                            score=0.96,
+                            reason=RecommendationReason.CONTENT_BASED,
+                            genre=s.genre,
+                            spotify_id=s.spotify_id
+                        ))
+
+            # If user didn't specify genres, augment with inferred genres so fallbacks stay contextually accurate
+            if not clean_genres and inferred_genres:
+                clean_genres = list(inferred_genres)
+
         # 1. Apriori-based recommendations
         if clean_basket:
             apriori_recs = await self._get_apriori_recommendations(clean_basket, clean_genres, top_k)
@@ -403,16 +434,54 @@ class RecommendationService:
             raise
 
     async def search_songs(self, query: str, limit: int = 20) -> List[SongSearchResult]:
-        """Search songs by track title or artist."""
+        """Search songs with broad multi-token matching across title, artist, and genre."""
         try:
-            pattern = f"%{query.strip()}%"
-            songs = (
+            tokens = [t.strip() for t in query.strip().split() if t.strip()]
+            if not tokens:
+                return []
+
+            # 1. Match songs where ALL tokens appear across track_name, artist, or genre
+            and_filters = [
+                or_(
+                    Song.track_name.ilike(f"%{t}%"),
+                    Song.artist.ilike(f"%{t}%"),
+                    Song.genre.ilike(f"%{t}%")
+                )
+                for t in tokens
+            ]
+            primary_songs = (
                 self.db.query(Song)
-                .filter(or_(Song.track_name.ilike(pattern), Song.artist.ilike(pattern)))
+                .filter(*and_filters)
                 .order_by(desc(Song.popularity_score))
                 .limit(limit)
                 .all()
             )
+
+            matched_ids = {s.id for s in primary_songs}
+            songs = list(primary_songs)
+
+            # 2. If fewer than limit and multiple tokens, expand with OR matching
+            if len(songs) < limit and len(tokens) > 1:
+                remaining = limit - len(songs)
+                or_filters = [
+                    or_(
+                        Song.track_name.ilike(f"%{t}%"),
+                        Song.artist.ilike(f"%{t}%"),
+                        Song.genre.ilike(f"%{t}%")
+                    )
+                    for t in tokens
+                ]
+                secondary_query = self.db.query(Song).filter(or_(*or_filters))
+                if matched_ids:
+                    secondary_query = secondary_query.filter(~Song.id.in_(matched_ids))
+                secondary_songs = (
+                    secondary_query
+                    .order_by(desc(Song.popularity_score))
+                    .limit(remaining)
+                    .all()
+                )
+                songs.extend(secondary_songs)
+
             return [
                 SongSearchResult(
                     id=s.id,

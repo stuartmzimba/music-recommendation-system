@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 if settings.DATABASE_URL.startswith("sqlite"):
     engine = create_engine(
         settings.DATABASE_URL,
-        connect_args={"check_same_thread": False},  # Allow SQLite to be used with multiple threads
+        connect_args={"check_same_thread": False, "timeout": 20},  # Allow SQLite to be used with multiple threads
         echo=settings.DEBUG
     )
 else:

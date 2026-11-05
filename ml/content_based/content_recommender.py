@@ -23,7 +23,7 @@ class ContentBasedRecommender:
     """Content-based recommender using song features and metadata."""
     
     def __init__(self):
-        self.db = SessionLocal()
+        self.db = None
         self.tfidf_vectorizer = None
         self.audio_scaler = None
         self.song_features_matrix = None
@@ -188,14 +188,28 @@ class ContentBasedRecommender:
         # Get song indices sorted by similarity
         similar_indices = np.argsort(similarities)[::-1]
         
-        # Filter out input songs and excluded songs
+        # Filter out input songs and excluded songs with artist-level blending
         filtered_indices = []
+        seed_indices_set = set(song_indices)
+        exclude_set = set(exclude_indices)
+        seed_allowed_count = 2 if len(song_indices) > 2 else 0
+        seed_included = 0
+
         for idx in similar_indices:
-            if idx not in song_indices and idx not in exclude_indices:
-                filtered_indices.append((idx, similarities[idx]))
-                if len(filtered_indices) >= top_k:
-                    break
-        
+            if idx in exclude_set:
+                continue
+            if idx in seed_indices_set:
+                if seed_included < seed_allowed_count:
+                    seed_included += 1
+                    filtered_indices.append((idx, similarities[idx]))
+                    if len(filtered_indices) >= top_k:
+                        break
+                continue
+
+            filtered_indices.append((idx, similarities[idx]))
+            if len(filtered_indices) >= top_k:
+                break
+
         return filtered_indices
     
     def get_recommendations_by_song_names(
@@ -377,11 +391,15 @@ class ContentBasedRecommender:
 
 _CONTENT_RECOMMENDER_INSTANCE = None
 
-def get_content_recommender(model_dir: str = "models") -> ContentBasedRecommender:
+def get_content_recommender(model_dir: str = None) -> ContentBasedRecommender:
     """Get or initialize singleton instance of ContentBasedRecommender."""
     global _CONTENT_RECOMMENDER_INSTANCE
     if _CONTENT_RECOMMENDER_INSTANCE is not None and _CONTENT_RECOMMENDER_INSTANCE.is_trained:
         return _CONTENT_RECOMMENDER_INSTANCE
+
+    if model_dir is None:
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        model_dir = os.path.join(project_root, "models")
 
     instance = ContentBasedRecommender()
     model_path = os.path.join(model_dir, "content_based_model.joblib")
